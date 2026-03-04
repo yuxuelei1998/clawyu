@@ -1,60 +1,67 @@
-# ClawYu Local AI Agent
+# ClawYu Local AI Agent 🐾
 
-`ClawYu` is a powerful, local AI agent (inspired by tools like OpenInterpreter) that brings the reasoning power of Gemini directly to your local machine. It can read files, write code, and execute shell commands to automatically accomplish tasks on your behalf.
+ClawYu is a powerful local AI agent driven by the Google Gemini series (currently defaulting to `gemini-2.0-flash`).
 
-**Security First**: It features a strict "Human-in-the-loop" security model. Any time the agent wants to write a file or execute a command, it will pause and ask for your explicit `(y/n)` permission.
+Unlike standard cloud-based chat bots, ClawYu is granted **permissions to interact with your local system**. Based on your natural language instructions, it can intelligently read files, write code, edit documents, and even execute shell scripts on your Windows system to automate a wide variety of tasks.
 
-## Setup Instructions
+## ✨ Key Features
 
-### 1. Install Dependencies
+* **Dual Interaction Interfaces**:
+  * **Elegant Web UI Workspace**: Experience an immersive, modern UI design with support for Markdown rendering and code syntax highlighting, providing an exceptionally smooth user experience.
+  * **CMD Terminal Mode**: Seamlessly interact via the pure text terminal.
+* **Strict Security & Authorization Mechanism**: Because the Agent has the authority to modify the local system, all write (`write_file`) and execute (`execute_command`) operations trigger **mandatory visual confirmation prompts for user review**. You can preview the code to be written or the command to be executed, and they will only take effect after you explicitly click "Approve", ensuring 100% system security.
+* **Powerful Local Execution**:
+  * Easily read and analyze massive local codebases.
+  * Automatically create files and refactor code for you.
+  * Execute PowerShell commands to search for information, scrape the web, or manage the file system in the background.
+* **Free and Capable**: Switched to and optimized for the `gemini-2.0-flash` model API, enjoying an extremely high free-tier quota (1500 requests per day), more than enough to handle high-intensity local development and collaboration.
 
-Make sure you have Python installed. Then, install the required packages:
+## 🚀 Quick Start
 
-```bash
-pip install -r requirements.txt
-```
+This project requires an Anaconda/Python environment along with the latest `google-genai` and `fastapi` frameworks.
 
-### 2. Get Your Gemini API Key
+### 1. Prerequisites
 
-To act as the "brain", ClawYu needs a Gemini API key.
-
-1. Go to [Google AI Studio](https://aistudio.google.com/app/apikey).
-2. Sign in with your Google account (your Gemini Advanced/Premium account will work).
-3. Click on the **"Create API key"** button.
-4. Copy the generated API key.
-
-### 3. Set the Environment Variable
-
-You must set your API key as an environment variable named `GEMINI_API_KEY`.
-
-**On Windows (Command Prompt):**
-
-```cmd
-set GEMINI_API_KEY=your_api_key_here
-```
-
-**On Windows (PowerShell):**
-
-```powershell
-$env:GEMINI_API_KEY="your_api_key_here"
-```
-
-*(Note: To set it permanently on Windows, search for "Environment Variables" in your Start Menu and add it to your User variables.)*
-
-### 4. Run `ClawYu`
-
-Start the agent by running:
+Ensure you have the necessary dependencies installed (preferably within your Anaconda environment):
 
 ```bash
+pip install fastapi uvicorn websockets google-genai rich
+```
+
+### 2. Obtain an API Key
+
+Since ClawYu's "brain" relies on Google Gemini, please visit [Google AI Studio](https://aistudio.google.com/) to apply for your **free API Key**, and have it ready to be injected into the startup script.
+
+### 3. One-Click Startup (Recommended Web UI)
+
+We provide an extremely convenient auto-launch script for you.
+
+1. Open the `start_clawyu.bat` file in the root directory (you can right-click and edit it).
+2. Replace the placeholder content after `GEMINI_API_KEY=` on line 3 with your actual API Key.
+3. **Double-click `start_clawyu.bat` to run it!**
+
+The script will automatically spin up the FastAPI server in the background and **automatically launch your default web browser** to open `http://127.0.0.1:8000`, landing you straight into the ClawYu system!
+
+### 4. Terminal Command Line Startup (Fallback)
+
+If you prefer to solely use the black-box terminal:
+
+```bash
+# 1. Set the temporary environment variable in the terminal
+set GEMINI_API_KEY=YOUR_API_KEY
+
+# 2. Start the pure command-line version of ClawYu
 python clawyu.py
 ```
 
-## Usage Example
+## 🛠️ Built-in Tools
 
-Once running, simply type your request in natural language:
+ClawYu exposes the following local Python functions internally to the LLM:
+* `read_file(filepath)`: Reads a file using its absolute path.
+* `write_file_sync(filepath, content)`: Writes to/modifies a file (Subject to strict security review).
+* `execute_command_sync(command)`: Executes Windows Shell commands (Subject to strict security review).
 
-- *"List all the files in this folder."*
-- *"Create a new Python script that prints 'Hello World' and run it."*
-- *"Find all the .txt files in my Documents folder and summarize them."*
+*Note: Currently, due to the limitations of the Google GenAI SDK v1beta version, official built-in tools (such as Google Search) cannot be combined with custom functions (Function Calling). Therefore, the Agent autonomously writes scripts to perform web searches when necessary.*
 
-The agent will figure out which tools to use and ALWAYS ask for permission before modifying your system.
+---
+**ClawYu - Your Omnipotent Local AI Pair Programming Assistant!** 💻🚀
