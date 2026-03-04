@@ -11,11 +11,7 @@ from google.genai import types
 
 app = FastAPI()
 
-# Mount the static folder to serve HTML/CSS/JS
 app.mount("/static", StaticFiles(directory="static"), name="static")
-
-# We use this global variable to pause process and wait for UI confirmation
-# It will store asyncio events for pending confirmations.
 pending_authorizations = {}
 
 class ConnectionManager:
@@ -38,12 +34,7 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
-# --- Async System Tools Wrapper ---
-# We wrap local tools to first emit an "auth_request" to the websocket,
-# and wait for an event to be set by the client.
-
 async def request_authorization(websocket: WebSocket, action: str, details: str) -> bool:
-    """Asks the UI for permission and waits for the response."""
     auth_id = os.urandom(8).hex()
     event = asyncio.Event()
     pending_authorizations[auth_id] = {
@@ -51,7 +42,6 @@ async def request_authorization(websocket: WebSocket, action: str, details: str)
         "approved": False
     }
     
-    # Send auth request to frontend
     await websocket.send_text(json.dumps({
         "type": "auth_request",
         "auth_id": auth_id,
@@ -59,18 +49,13 @@ async def request_authorization(websocket: WebSocket, action: str, details: str)
         "details": details
     }))
     
-    # Wait for the frontend to respond (which sets the event)
     await event.wait()
     
-    # Retrieve the result and cleanup
     approved = pending_authorizations[auth_id]["approved"]
     del pending_authorizations[auth_id]
     return approved
 
-# --- Actual Tool Functions ---
-
 def read_file(filepath: str) -> str:
-    """Reads the contents of a file. Use absolute paths when possible."""
     try:
         with open(filepath, 'r', encoding='utf-8') as f:
             return f.read()
@@ -78,7 +63,6 @@ def read_file(filepath: str) -> str:
         return f"Error reading file {filepath}: {e}"
 
 def write_file_sync(filepath: str, content: str) -> str:
-    """Writes content to a file."""
     try:
         with open(filepath, 'w', encoding='utf-8') as f:
             f.write(content)
@@ -87,7 +71,6 @@ def write_file_sync(filepath: str, content: str) -> str:
         return f"Error writing file {filepath}: {e}"
 
 def execute_command_sync(command: str) -> str:
-    """Executes a shell command on the local system."""
     try:
         result = subprocess.run(
             command,
@@ -106,7 +89,6 @@ def execute_command_sync(command: str) -> str:
     except Exception as e:
         return f"Error executing command: {e}"
 
-# --- Setup Gemini Client ---
 api_key = os.environ.get("GEMINI_API_KEY")
 if not api_key:
     print("Error: GEMINI_API_KEY environment variable not set.")
@@ -114,14 +96,12 @@ if not api_key:
 
 client = genai.Client(api_key=api_key)
 
-# Main Page
 @app.get("/")
 async def get():
     with open("static/index.html", "r", encoding='utf-8') as f:
         html_content = f.read()
     return HTMLResponse(html_content)
 
-# WebSocket Endpoint
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
@@ -141,12 +121,11 @@ async def websocket_endpoint(websocket: WebSocket):
     )
     
     try:
-        chat = client.chats.create(model="gemini-2.5-flash", config=config)
+        chat = client.chats.create(model="gemini-2.0-flash", config=config)
     except Exception as e:
         await manager.send_message(json.dumps({"type": "error", "content": f"Failed to initialize Gemini: {str(e)}"}), websocket)
         return
 
-    # Send welcome message
     await manager.send_message(json.dumps({
         "type": "message", 
         "role": "agent", 
@@ -158,17 +137,13 @@ async def websocket_endpoint(websocket: WebSocket):
             data = await websocket.receive_text()
             payload = json.loads(data)
             
-            # Handle incoming chat messages
             if payload["type"] == "chat":
                 user_msg = payload["content"]
                 
-                # Tell UI we're thinking
                 await manager.send_message(json.dumps({"type": "status", "content": "thinking"}), websocket)
 
-                # Send to Gemini
                 response = chat.send_message(user_msg)
                 
-                # Handle Tool Calls Loop
                 while response.function_calls:
                     tool_results = []
                     for function_call in response.function_calls:
@@ -186,7 +161,6 @@ async def websocket_endpoint(websocket: WebSocket):
                             preview = content[:300] + "..." if len(content) > 300 else content
                             details = f"File: {filepath}\n\nPreview:\n{preview}"
                             
-                            # Ask GUI for permission
                             approved = await request_authorization(websocket, "Write File", details)
                             if approved:
                                 await manager.send_message(json.dumps({"type": "status", "content": f"writing to {filepath}..."}), websocket)
@@ -198,7 +172,6 @@ async def websocket_endpoint(websocket: WebSocket):
                             command = args.get("command", "")
                             details = f"Command:\n{command}"
                             
-                            # Ask GUI for permission
                             approved = await request_authorization(websocket, "Execute Command", details)
                             if approved:
                                 await manager.send_message(json.dumps({"type": "status", "content": "executing command..."}), websocket)
@@ -216,7 +189,6 @@ async def websocket_endpoint(websocket: WebSocket):
                     await manager.send_message(json.dumps({"type": "status", "content": "analyzing results..."}), websocket)
                     response = chat.send_message(tool_results)
 
-                # Finally, send final text response to UI
                 if response.text:
                     await manager.send_message(json.dumps({
                         "type": "message",
@@ -226,7 +198,6 @@ async def websocket_endpoint(websocket: WebSocket):
                 
                 await manager.send_message(json.dumps({"type": "status", "content": "idle"}), websocket)
 
-            # Handle Auth Responses from UI
             elif payload["type"] == "auth_response":
                 auth_id = payload["auth_id"]
                 approved = payload["approved"]
@@ -242,5 +213,4 @@ async def websocket_endpoint(websocket: WebSocket):
 
 if __name__ == "__main__":
     import uvicorn
-    # Make sure we run on 0.0.0.0 so we can access from localhost
     uvicorn.run("clawyu_server:app", host="127.0.0.1", port=8000, reload=True)

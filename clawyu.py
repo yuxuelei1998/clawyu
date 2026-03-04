@@ -89,7 +89,7 @@ def main():
     )
     
     try:
-        chat = client.chats.create(model="gemini-2.5-flash", config=config)
+        chat = client.chats.create(model="gemini-2.0-flash", config=config)
     except Exception as e:
         console.print(f"[bold red]Error creating chat session: {e}[/bold red]")
         sys.exit(1)
