@@ -1,0 +1,5 @@
+google-genai>=0.3.0
+rich>=13.0.0
+fastapi>=0.100.0
+uvicorn>=0.22.0
+websockets>=11.0.0

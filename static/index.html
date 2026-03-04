@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ClawYu | Local AI Agent</title>
+    <!-- Modern Typography -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <!-- Highlight.js for Code Blocks -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="background">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+    </div>
+
+    <div class="app-container">
+        <header>
+            <div class="logo">
+                <div class="sparkle">✨</div>
+                <h1>Claw<span class="highlight">Yu</span></h1>
+            </div>
+            <div class="status-indicator">
+                <div class="dot" id="connection-dot"></div>
+                <span id="connection-status">Connecting...</span>
+            </div>
+        </header>
+
+        <main id="chat-container">
+            <div id="messages">
+                <!-- Chat messages will be injected here -->
+            </div>
+            <div id="typing-indicator" class="hidden">
+                <span class="agent-name">ClawYu</span> <span id="typing-text">thinking...</span>
+            </div>
+        </main>
+
+        <div class="input-area">
+            <textarea id="user-input" placeholder="Ask ClawYu to do something locally..." rows="1" autofocus></textarea>
+            <button id="send-btn">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M2.01 21L23 12L2.01 3L2 10L17 12L2 14L2.01 21Z" fill="currentColor"/>
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- Security Authorization Modal -->
+    <div id="auth-modal" class="modal-overlay hidden">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>⚠️ Security Authorization</h2>
+                <p>ClawYu needs your permission to modify your system.</p>
+            </div>
+            <div class="modal-body">
+                <div class="action-type" id="auth-action">Write File</div>
+                <div class="action-details" id="auth-details">
+                    <!-- Details will go here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btn-reject" class="btn btn-secondary">Reject</button>
+                <button id="btn-approve" class="btn btn-primary">Approve & Execute</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
