@@ -2,9 +2,10 @@
 echo ==============================================
 echo        Starting ClawYu Local AI Agent...
 echo ==============================================
-
-set LLM_PROVIDER=gemini
-set LLM_MODEL=gemini-2.5-flash-lite
+:: Set your LLM Provider. Built-in options: gemini, kimi, deepseek, ollama
+:: If using ollama, make sure you have installed it and pulled the model (e.g., ollama pull qwen2.5:3b)
+set LLM_PROVIDER=ollama
+set LLM_MODEL=qwen2.5-coder:14b
 
 :: Provider API Keys
 set GEMINI_API_KEY=your_gemini_api_key_here

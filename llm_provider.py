@@ -65,9 +65,16 @@ class OpenAIChatSession:
         self.client = openai.OpenAI(api_key=api_key, base_url=base_url)
         self.model = model
         self.temperature = temperature
+        # For local models, strongly encourage tool use in the system prompt
+        enhanced_instruction = (
+            f"{system_instruction}\n"
+            "CRITICAL: You are running locally and HAVE permissions to access the file system, execute commands, and fetch real-time data. "
+            "You MUST use the provided tools to fulfill user requests involving the local system, precise time, or weather. "
+            "NEVER say you cannot access the file system or internet. Use the tools."
+        )
         
         self.messages = [
-            {"role": "system", "content": system_instruction}
+            {"role": "system", "content": enhanced_instruction}
         ]
         
         self.tools = []
@@ -85,6 +92,12 @@ class OpenAIChatSession:
                 if not desc:
                     if tool.__name__ == "read_file":
                         desc = "Reads a file using its absolute path."
+                    elif tool.__name__ == "list_directory":
+                        desc = "Lists all files and folders inside a given absolute directory path."
+                    elif tool.__name__ == "get_current_time":
+                        desc = "Gets the current local date and time."
+                    elif tool.__name__ == "get_weather":
+                        desc = "Gets the current weather for a specified city (e.g. 'Beijing', 'New York')."
                     elif tool.__name__ in ("write_file", "write_file_sync"):
                         desc = "Writes to/modifies a file given its filepath and the content."
                     elif tool.__name__ in ("execute_command", "execute_command_sync"):
@@ -107,8 +120,28 @@ class OpenAIChatSession:
 
     def _parse_response(self, response):
         msg = response.choices[0].message
-        self.messages.append(msg)
         
+        msg_dict = {
+            "role": msg.role,
+            "content": msg.content or "",
+        }
+        if msg.tool_calls:
+            tool_calls = []
+            for tc in msg.tool_calls:
+                tc_dict = {
+                    "id": tc.id,
+                    "type": tc.type,
+                    "function": {
+                        "name": tc.function.name,
+                        "arguments": tc.function.arguments
+                    }
+                }
+                tool_calls.append(tc_dict)
+            msg_dict["tool_calls"] = tool_calls
+            
+        self.messages.append(msg_dict)
+        
+        text = msg.content
         calls = []
         if msg.tool_calls:
             for tc in msg.tool_calls:
@@ -119,8 +152,39 @@ class OpenAIChatSession:
                     except json.JSONDecodeError:
                         pass
                 calls.append(ToolCall(name=tc.function.name, args=args, id=tc.id))
-                
-        text = msg.content
+        elif msg.content:
+            # Fallback for models (like some local Ollama models) that output function calls as raw JSON text embedded in their response
+            import re
+            
+            # Find all JSON-like structures that look like tool calls: {"name": "...", "arguments": {...}}
+            json_matches = re.finditer(r'\{[^{}]*"name"\s*:\s*"[^"]+"\s*,\s*"arguments"\s*:\s*\{.*?\}\s*\}', msg.content, re.DOTALL)
+            
+            for match in json_matches:
+                json_str = match.group(0)
+                try:
+                    content_json = json.loads(json_str)
+                    if isinstance(content_json, dict) and "name" in content_json and "arguments" in content_json:
+                        import uuid
+                        fake_id = "call_" + str(uuid.uuid4())[:8]
+                        calls.append(ToolCall(name=content_json["name"], args=content_json["arguments"], id=fake_id))
+                        
+                        # Also append it to the message dict so history remains consistent
+                        if "tool_calls" not in msg_dict:
+                            msg_dict["tool_calls"] = []
+                            
+                        msg_dict["tool_calls"].append({
+                            "id": fake_id,
+                            "type": "function",
+                            "function": {
+                                "name": content_json["name"],
+                                "arguments": json.dumps(content_json["arguments"])
+                            }
+                        })
+                        # Remove the JSON text from the content so we don't display raw UI JSON
+                        msg_dict["content"] = msg_dict["content"].replace(json_str, "")
+                        text = (text or "").replace(json_str, "")
+                except json.JSONDecodeError:
+                    continue
         return LLMResponse(text=text, function_calls=calls)
 
     def send_message(self, message):
@@ -156,6 +220,9 @@ class OpenAIChatSession:
         return self._parse_response(response)
 
 def create_chat_session(system_instruction, tools):
+    # Enforce Chinese output globally for all providers
+    system_instruction += "\nIMPORTANT: You MUST respond to the user exclusively in Chinese (简体中文). All your explanations, thoughts, and conversational text must be in Chinese."
+
     provider = os.environ.get("LLM_PROVIDER", "gemini").lower()
     temperature = 0.0
     
@@ -174,5 +241,8 @@ def create_chat_session(system_instruction, tools):
         if not api_key:
             raise ValueError("DEEPSEEK_API_KEY environment variable not set.")
         return OpenAIChatSession(model, system_instruction, tools, temperature, "https://api.deepseek.com", api_key)
+    elif provider == "ollama":
+        model = os.environ.get("LLM_MODEL", "qwen2.5:3b")
+        return OpenAIChatSession(model, system_instruction, tools, temperature, "http://localhost:11434/v1", "ollama")
     else:
         raise ValueError(f"Unknown LLM Provider: {provider}")

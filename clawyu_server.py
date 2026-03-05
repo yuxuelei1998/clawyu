@@ -90,6 +90,103 @@ def execute_command_sync(command: str) -> str:
 
 # LLM client initialization handled in create_chat_session
 
+async def process_chat(websocket: WebSocket, chat, user_msg: str):
+    try:
+        await manager.send_message(json.dumps({"type": "status", "content": "thinking"}), websocket)
+
+        response = await asyncio.to_thread(chat.send_message, user_msg)
+        
+        while response.function_calls:
+            tool_results = []
+            for function_call in response.function_calls:
+                name = function_call.name
+                args = function_call.args
+                
+                await manager.send_message(json.dumps({"type": "status", "content": f"running tool '{name}'..."}), websocket)
+                
+                if name == "read_file":
+                    result = await asyncio.to_thread(read_file, **args)
+                
+                elif name == "list_directory":
+                    dir_path = args.get("dir_path", "Unknown")
+                    try:
+                        files = await asyncio.to_thread(os.listdir, dir_path)
+                        result = f"Contents of {dir_path}:\n" + "\n".join(files)
+                    except Exception as e:
+                        result = f"Error listing directory {dir_path}: {e}"
+                        
+                elif name == "get_current_time":
+                    from datetime import datetime
+                    result = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+                elif name == "get_weather":
+                    city = args.get("city", "")
+                    def fetch_weather(c):
+                        import urllib.request
+                        import urllib.parse
+                        import ssl
+                        try:
+                            url = f"https://wttr.in/{urllib.parse.quote(c)}?format=3"
+                            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+                            ctx = ssl.create_default_context()
+                            ctx.check_hostname = False
+                            ctx.verify_mode = ssl.CERT_NONE
+                            with urllib.request.urlopen(req, timeout=15, context=ctx) as response:
+                                return response.read().decode('utf-8').strip()
+                        except Exception as e:
+                            return f"Error fetching weather for {c}: {e}"
+                    result = await asyncio.to_thread(fetch_weather, city)
+                        
+                elif name == "write_file_sync":
+                    filepath = args.get("filepath", "Unknown")
+                    content = args.get("content", "")
+                    preview = content[:300] + "..." if len(content) > 300 else content
+                    details = f"File: {filepath}\n\nPreview:\n{preview}"
+                    
+                    approved = await request_authorization(websocket, "Write File", details)
+                    if approved:
+                        await manager.send_message(json.dumps({"type": "status", "content": f"writing to {filepath}..."}), websocket)
+                        result = await asyncio.to_thread(write_file_sync, filepath, content)
+                    else:
+                        result = "Operation cancelled by user via GUI."
+                        
+                elif name == "execute_command_sync":
+                    command = args.get("command", "")
+                    details = f"Command:\n{command}"
+                    
+                    approved = await request_authorization(websocket, "Execute Command", details)
+                    if approved:
+                        await manager.send_message(json.dumps({"type": "status", "content": "executing command..."}), websocket)
+                        result = await asyncio.to_thread(execute_command_sync, command)
+                    else:
+                        result = "Operation cancelled by user via GUI."
+                else:
+                    result = f"Tool {name} not found."
+                    
+                tool_results.append({
+                    "id": getattr(function_call, "id", None),
+                    "name": name,
+                    "result": result
+                })
+
+            await manager.send_message(json.dumps({"type": "status", "content": "analyzing results..."}), websocket)
+            response = await asyncio.to_thread(chat.send_tool_results, tool_results)
+
+        if response.text:
+            await manager.send_message(json.dumps({
+                "type": "message",
+                "role": "agent",
+                "content": response.text
+            }), websocket)
+        
+        await manager.send_message(json.dumps({"type": "status", "content": "idle"}), websocket)
+    except Exception as e:
+        await manager.send_message(json.dumps({
+            "type": "error",
+            "content": f"Error during chat processing: {str(e)}"
+        }), websocket)
+        await manager.send_message(json.dumps({"type": "status", "content": "idle"}), websocket)
+
 @app.get("/")
 async def get():
     with open("static/index.html", "r", encoding='utf-8') as f:
@@ -104,12 +201,26 @@ async def websocket_endpoint(websocket: WebSocket):
         "You are ClawYu, a highly capable local AI agent with a beautiful secure web GUI interface. "
         "You have access to the user's local system through function calling. You can read files, write files, and execute shell commands. "
         "You run on Windows. When you need to do something on the user's local system, USE THE TOOLS. "
+        "IMPORTANT: You have tools to get the current time (`get_current_time`) and weather (`get_weather`). If the user asks for time or weather, you MUST use these tools. NEVER say you cannot access real-time info. "
         "Don't just give the user instructions to do it themselves unless you cannot do it or the user explicitly asks how to do it. "
         "All write and execute operations will prompt the user for confirmation securely via the GUI, so you don't need to ask for permission. "
         "Be helpful, concise, and proactive. When executing commands, remember the OS is Windows (Powershell/CMD)."
         "Since your interface is now a modern browser GUI, feel free to use standard markdown syntax (like **bold**, `code snippets`, URLs, and bullet points) in your replies, the frontend will render them beautifully."
     )
-    tools = [read_file, write_file_sync, execute_command_sync]
+    
+    def list_directory(dir_path: str) -> str:
+        """Lists the contents of a directory using its absolute path."""
+        pass
+        
+    def get_current_time() -> str:
+        """Gets the current local date and time."""
+        pass
+
+    def get_weather(city: str) -> str:
+        """Gets the current weather for a specified city."""
+        pass
+
+    tools = [read_file, write_file_sync, execute_command_sync, list_directory, get_current_time, get_weather]
     
     try:
         chat = create_chat_session(system_instruction, tools)
@@ -130,65 +241,7 @@ async def websocket_endpoint(websocket: WebSocket):
             
             if payload["type"] == "chat":
                 user_msg = payload["content"]
-                
-                await manager.send_message(json.dumps({"type": "status", "content": "thinking"}), websocket)
-
-                response = chat.send_message(user_msg)
-                
-                while response.function_calls:
-                    tool_results = []
-                    for function_call in response.function_calls:
-                        name = function_call.name
-                        args = function_call.args
-                        
-                        await manager.send_message(json.dumps({"type": "status", "content": f"running tool '{name}'..."}), websocket)
-                        
-                        if name == "read_file":
-                            result = read_file(**args)
-                        
-                        elif name == "write_file_sync":
-                            filepath = args.get("filepath", "Unknown")
-                            content = args.get("content", "")
-                            preview = content[:300] + "..." if len(content) > 300 else content
-                            details = f"File: {filepath}\n\nPreview:\n{preview}"
-                            
-                            approved = await request_authorization(websocket, "Write File", details)
-                            if approved:
-                                await manager.send_message(json.dumps({"type": "status", "content": f"writing to {filepath}..."}), websocket)
-                                result = write_file_sync(filepath, content)
-                            else:
-                                result = "Operation cancelled by user via GUI."
-                                
-                        elif name == "execute_command_sync":
-                            command = args.get("command", "")
-                            details = f"Command:\n{command}"
-                            
-                            approved = await request_authorization(websocket, "Execute Command", details)
-                            if approved:
-                                await manager.send_message(json.dumps({"type": "status", "content": "executing command..."}), websocket)
-                                result = execute_command_sync(command)
-                            else:
-                                result = "Operation cancelled by user via GUI."
-                        else:
-                            result = f"Tool {name} not found."
-                            
-                        tool_results.append({
-                            "id": getattr(function_call, "id", None),
-                            "name": name,
-                            "result": result
-                        })
-
-                    await manager.send_message(json.dumps({"type": "status", "content": "analyzing results..."}), websocket)
-                    response = chat.send_tool_results(tool_results)
-
-                if response.text:
-                    await manager.send_message(json.dumps({
-                        "type": "message",
-                        "role": "agent",
-                        "content": response.text
-                    }), websocket)
-                
-                await manager.send_message(json.dumps({"type": "status", "content": "idle"}), websocket)
+                asyncio.create_task(process_chat(websocket, chat, user_msg))
 
             elif payload["type"] == "auth_response":
                 auth_id = payload["auth_id"]

@@ -30,13 +30,17 @@ pip install fastapi uvicorn websockets google-genai rich
 
 ### 2. Obtain an API Key
 
-ClawYu now supports multiple LLM providers. By default, it uses Google Gemini, but it also natively supports Moonshot (Kimi) and DeepSeek.
+ClawYu now supports multiple LLM providers. By default, it uses Google Gemini, but it also natively supports Moonshot (Kimi), DeepSeek, and **Local Ollama Models**.
 
 * For Gemini: Visit [Google AI Studio](https://aistudio.google.com/) to apply for a free API Key.
 * For Kimi (Moonshot): Visit [Moonshot Platform](https://platform.moonshot.cn/) to apply for an API Key.
 * For DeepSeek: Visit [DeepSeek Platform](https://platform.deepseek.com/) to apply for an API Key.
+* **For Ollama (Local Backup):**
+  1. Download and install [Ollama](https://ollama.com/).
+  2. Open your terminal and pull a lightweight model that supports tool calling, e.g., `ollama pull qwen2.5:3b` or `ollama pull llama3.2`.
+  3. No API key is required. Just set `LLM_PROVIDER=ollama` and `LLM_MODEL=qwen2.5:3b` (or your chosen model) in `start_clawyu.bat`.
 
-**Important:** If you plan to use `kimi` or `deepseek`, you must install the `openai` python package first:
+**Important:** If you plan to use `kimi`, `deepseek`, or `ollama`, you must install the `openai` python package first:
 
 ```bash
 pip install openai
