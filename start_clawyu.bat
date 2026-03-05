@@ -3,7 +3,7 @@ echo ==============================================
 echo        Starting ClawYu Local AI Agent...
 echo ==============================================
 
-set GEMINI_API_KEY=AIzaSyAG5hxVu3vNJSxVV5UElexrppWn3XRvD9w
+set GEMINI_API_KEY=
 
 timeout /t 1 /nobreak >nul
 
