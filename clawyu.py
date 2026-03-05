@@ -1,8 +1,7 @@
 import os
 import subprocess
 import sys
-from google import genai
-from google.genai import types
+from llm_provider import create_chat_session
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
@@ -62,19 +61,7 @@ TOOL_MAP = {
 def main():
     console.print(Panel.fit("[bold cyan]Welcome to clawyu Local AI Agent[/bold cyan]\nType your request below. Type 'exit' to quit.", border_style="cyan"))
     
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key:
-        console.print("[bold red]Error: GEMINI_API_KEY environment variable not set.[/bold red]")
-        console.print("Please set it before running clawyu.")
-        sys.exit(1)
-
     try:
-        client = genai.Client(api_key=api_key)
-    except Exception as e:
-        console.print(f"[bold red]Failed to initialize Gemini Client: {e}[/bold red]")
-        sys.exit(1)
-
-    config = types.GenerateContentConfig(
         system_instruction=(
             "You are clawyu, a highly capable local AI agent. You have access to the user's local system "
             "through function calling. You can read files, write files, and execute shell commands. "
@@ -84,14 +71,10 @@ def main():
             "to ask for permission first, just call the tool. Be helpful, concise, and proactive. "
             "When executing commands, remember the OS is Windows (Powershell/CMD)."
         ),
-        tools=[read_file, write_file, execute_command],
-        temperature=0.0, 
-    )
-    
-    try:
-        chat = client.chats.create(model="gemini-2.0-flash", config=config)
+        chat = create_chat_session(system_instruction=system_instruction, tools=[read_file, write_file, execute_command])
     except Exception as e:
-        console.print(f"[bold red]Error creating chat session: {e}[/bold red]")
+        console.print(f"[bold red]Error initializing LLM Provider: {e}[/bold red]")
+        console.print("[bold yellow]If you are using Kimi or DeepSeek, please ensure you have run 'pip install openai'.[/bold yellow]")
         sys.exit(1)
 
     while True:
@@ -122,18 +105,20 @@ def main():
                         except Exception as e:
                             result = f"Error calling tool {name}: {e}"
                         
-                        tool_results.append(types.Part.from_function_response(
-                            name=name,
-                            response={"result": result}
-                        ))
+                        tool_results.append({
+                            "id": getattr(function_call, "id", None),
+                            "name": name,
+                            "result": result
+                        })
                     else:
-                        tool_results.append(types.Part.from_function_response(
-                            name=name,
-                            response={"error": f"Tool {name} not found"}
-                        ))
+                        tool_results.append({
+                            "id": getattr(function_call, "id", None),
+                            "name": name,
+                            "result": f"Error: Tool {name} not found"
+                        })
                 
                 console.print("[dim]Analyzing results...[/dim]")
-                response = chat.send_message(tool_results)
+                response = chat.send_tool_results(tool_results)
 
             if response.text:
                 console.print("\n[bold blue]clawyu:[/bold blue]")

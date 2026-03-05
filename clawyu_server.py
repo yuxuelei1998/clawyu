@@ -6,8 +6,7 @@ import subprocess
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from google import genai
-from google.genai import types
+from llm_provider import create_chat_session
 
 app = FastAPI()
 
@@ -89,12 +88,7 @@ def execute_command_sync(command: str) -> str:
     except Exception as e:
         return f"Error executing command: {e}"
 
-api_key = os.environ.get("GEMINI_API_KEY")
-if not api_key:
-    print("Error: GEMINI_API_KEY environment variable not set.")
-    sys.exit(1)
-
-client = genai.Client(api_key=api_key)
+# LLM client initialization handled in create_chat_session
 
 @app.get("/")
 async def get():
@@ -106,24 +100,21 @@ async def get():
 async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
     
-    config = types.GenerateContentConfig(
-        system_instruction=(
-            "You are ClawYu, a highly capable local AI agent with a beautiful secure web GUI interface. "
-            "You have access to the user's local system through function calling. You can read files, write files, and execute shell commands. "
-            "You run on Windows. When you need to do something on the user's system, USE THE TOOLS. "
-            "Don't just give the user instructions to do it themselves unless you cannot do it or the user explicitly asks how to do it. "
-            "All write and execute operations will prompt the user for confirmation securely via the GUI, so you don't need to ask for permission. "
-            "Be helpful, concise, and proactive. When executing commands, remember the OS is Windows (Powershell/CMD)."
-            "Since your interface is now a modern browser GUI, feel free to use standard markdown syntax (like **bold**, `code snippets`, URLs, and bullet points) in your replies, the frontend will render them beautifully."
-        ),
-        tools=[read_file, write_file_sync, execute_command_sync], 
-        temperature=0.0,
+    system_instruction=(
+        "You are ClawYu, a highly capable local AI agent with a beautiful secure web GUI interface. "
+        "You have access to the user's local system through function calling. You can read files, write files, and execute shell commands. "
+        "You run on Windows. When you need to do something on the user's local system, USE THE TOOLS. "
+        "Don't just give the user instructions to do it themselves unless you cannot do it or the user explicitly asks how to do it. "
+        "All write and execute operations will prompt the user for confirmation securely via the GUI, so you don't need to ask for permission. "
+        "Be helpful, concise, and proactive. When executing commands, remember the OS is Windows (Powershell/CMD)."
+        "Since your interface is now a modern browser GUI, feel free to use standard markdown syntax (like **bold**, `code snippets`, URLs, and bullet points) in your replies, the frontend will render them beautifully."
     )
+    tools = [read_file, write_file_sync, execute_command_sync]
     
     try:
-        chat = client.chats.create(model="gemini-2.0-flash", config=config)
+        chat = create_chat_session(system_instruction, tools)
     except Exception as e:
-        await manager.send_message(json.dumps({"type": "error", "content": f"Failed to initialize Gemini: {str(e)}"}), websocket)
+        await manager.send_message(json.dumps({"type": "error", "content": f"Failed to initialize LLM Provider: {str(e)}\n\n(If you switched to Kimi or Deepseek, make sure you ran pip install openai)"}), websocket)
         return
 
     await manager.send_message(json.dumps({
@@ -181,13 +172,14 @@ async def websocket_endpoint(websocket: WebSocket):
                         else:
                             result = f"Tool {name} not found."
                             
-                        tool_results.append(types.Part.from_function_response(
-                            name=name,
-                            response={"result": result}
-                        ))
+                        tool_results.append({
+                            "id": getattr(function_call, "id", None),
+                            "name": name,
+                            "result": result
+                        })
 
                     await manager.send_message(json.dumps({"type": "status", "content": "analyzing results..."}), websocket)
-                    response = chat.send_message(tool_results)
+                    response = chat.send_tool_results(tool_results)
 
                 if response.text:
                     await manager.send_message(json.dumps({

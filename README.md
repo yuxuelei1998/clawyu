@@ -30,7 +30,17 @@ pip install fastapi uvicorn websockets google-genai rich
 
 ### 2. Obtain an API Key
 
-Since ClawYu's "brain" relies on Google Gemini, please visit [Google AI Studio](https://aistudio.google.com/) to apply for your **free API Key**, and have it ready to be injected into the startup script.
+ClawYu now supports multiple LLM providers. By default, it uses Google Gemini, but it also natively supports Moonshot (Kimi) and DeepSeek.
+
+* For Gemini: Visit [Google AI Studio](https://aistudio.google.com/) to apply for a free API Key.
+* For Kimi (Moonshot): Visit [Moonshot Platform](https://platform.moonshot.cn/) to apply for an API Key.
+* For DeepSeek: Visit [DeepSeek Platform](https://platform.deepseek.com/) to apply for an API Key.
+
+**Important:** If you plan to use `kimi` or `deepseek`, you must install the `openai` python package first:
+
+```bash
+pip install openai
+```
 
 ### 3. One-Click Startup (Recommended Web UI)
 
@@ -57,6 +67,7 @@ python clawyu.py
 ## 🛠️ Built-in Tools
 
 ClawYu exposes the following local Python functions internally to the LLM:
+
 * `read_file(filepath)`: Reads a file using its absolute path.
 * `write_file_sync(filepath, content)`: Writes to/modifies a file (Subject to strict security review).
 * `execute_command_sync(command)`: Executes Windows Shell commands (Subject to strict security review).
