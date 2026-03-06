@@ -13,7 +13,7 @@ class LLMResponse:
         self.function_calls = function_calls or []
 
 class GeminiChatSession:
-    def __init__(self, model, system_instruction, tools, temperature):
+    def __init__(self, model, system_instruction, tools, temperature, mcp_tools=None):
         try:
             from google import genai
             from google.genai import types
@@ -27,9 +27,20 @@ class GeminiChatSession:
             raise ValueError("GEMINI_API_KEY environment variable not set.")
         client = genai.Client(api_key=api_key)
         
+        all_tools = list(tools) if tools else []
+        if mcp_tools:
+            for mt in mcp_tools:
+                fun_desc = mt["function"]
+                fd = types.FunctionDeclaration(
+                    name=fun_desc["name"],
+                    description=fun_desc.get("description", ""),
+                    parameters=fun_desc.get("parameters", {})
+                )
+                all_tools.append(types.Tool(function_declarations=[fd]))
+        
         config = types.GenerateContentConfig(
             system_instruction=system_instruction,
-            tools=tools,
+            tools=all_tools,
             temperature=temperature,
         )
         self.chat = client.chats.create(model=model, config=config)
@@ -56,7 +67,7 @@ class GeminiChatSession:
         return self._parse_response(response)
 
 class OpenAIChatSession:
-    def __init__(self, model, system_instruction, tools, temperature, base_url, api_key):
+    def __init__(self, model, system_instruction, tools, temperature, base_url, api_key, mcp_tools=None):
         try:
             import openai
         except ImportError:
@@ -117,6 +128,10 @@ class OpenAIChatSession:
                         }
                     }
                 })
+
+        if mcp_tools:
+            for mt in mcp_tools:
+                self.tools.append(mt)
 
     def _parse_response(self, response):
         msg = response.choices[0].message
@@ -219,7 +234,7 @@ class OpenAIChatSession:
         response = self.client.chat.completions.create(**kwargs)
         return self._parse_response(response)
 
-def create_chat_session(system_instruction, tools):
+def create_chat_session(system_instruction, tools, mcp_tools=None):
     # Enforce Chinese output globally for all providers
     system_instruction += "\nIMPORTANT: You MUST respond to the user exclusively in Chinese (简体中文). All your explanations, thoughts, and conversational text must be in Chinese."
 
@@ -228,21 +243,21 @@ def create_chat_session(system_instruction, tools):
     
     if provider == "gemini":
         model = os.environ.get("LLM_MODEL", "gemini-2.5-flash-lite")
-        return GeminiChatSession(model, system_instruction, tools, temperature)
+        return GeminiChatSession(model, system_instruction, tools, temperature, mcp_tools)
     elif provider == "kimi":
         model = os.environ.get("LLM_MODEL", "moonshot-v1-8k")
         api_key = os.environ.get("KIMI_API_KEY")
         if not api_key:
             raise ValueError("KIMI_API_KEY environment variable not set.")
-        return OpenAIChatSession(model, system_instruction, tools, temperature, "https://api.moonshot.cn/v1", api_key)
+        return OpenAIChatSession(model, system_instruction, tools, temperature, "https://api.moonshot.cn/v1", api_key, mcp_tools)
     elif provider == "deepseek":
         model = os.environ.get("LLM_MODEL", "deepseek-chat")
         api_key = os.environ.get("DEEPSEEK_API_KEY")
         if not api_key:
             raise ValueError("DEEPSEEK_API_KEY environment variable not set.")
-        return OpenAIChatSession(model, system_instruction, tools, temperature, "https://api.deepseek.com", api_key)
+        return OpenAIChatSession(model, system_instruction, tools, temperature, "https://api.deepseek.com", api_key, mcp_tools)
     elif provider == "ollama":
         model = os.environ.get("LLM_MODEL", "qwen2.5:3b")
-        return OpenAIChatSession(model, system_instruction, tools, temperature, "http://localhost:11434/v1", "ollama")
+        return OpenAIChatSession(model, system_instruction, tools, temperature, "http://localhost:11434/v1", "ollama", mcp_tools)
     else:
         raise ValueError(f"Unknown LLM Provider: {provider}")

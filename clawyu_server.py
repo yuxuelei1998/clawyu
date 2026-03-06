@@ -7,6 +7,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from llm_provider import create_chat_session
+from mcp_manager import mcp_manager
 
 app = FastAPI()
 
@@ -160,6 +161,14 @@ async def process_chat(websocket: WebSocket, chat, user_msg: str):
                         result = await asyncio.to_thread(execute_command_sync, command)
                     else:
                         result = "Operation cancelled by user via GUI."
+                elif name.startswith("mcp_"):
+                    parts = name.split("___", 1)
+                    if len(parts) == 2:
+                        server_name_part = parts[0][4:] # remove "mcp_"
+                        mcp_tool_name = parts[1]
+                        result = await mcp_manager.call_tool(server_name_part, mcp_tool_name, args)
+                    else:
+                        result = f"Invalid MCP tool name format: {name}"
                 else:
                     result = f"Tool {name} not found."
                     
@@ -186,6 +195,14 @@ async def process_chat(websocket: WebSocket, chat, user_msg: str):
             "content": f"Error during chat processing: {str(e)}"
         }), websocket)
         await manager.send_message(json.dumps({"type": "status", "content": "idle"}), websocket)
+
+@app.on_event("startup")
+async def startup_event():
+    await mcp_manager.initialize()
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    await mcp_manager.close()
 
 @app.get("/")
 async def get():
@@ -221,9 +238,10 @@ async def websocket_endpoint(websocket: WebSocket):
         pass
 
     tools = [read_file, write_file_sync, execute_command_sync, list_directory, get_current_time, get_weather]
+    mcp_tools = await mcp_manager.get_all_tools()
     
     try:
-        chat = create_chat_session(system_instruction, tools)
+        chat = create_chat_session(system_instruction, tools, mcp_tools)
     except Exception as e:
         await manager.send_message(json.dumps({"type": "error", "content": f"Failed to initialize LLM Provider: {str(e)}\n\n(If you switched to Kimi or Deepseek, make sure you ran pip install openai)"}), websocket)
         return

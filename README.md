@@ -1,6 +1,6 @@
 # ClawYu Local AI Agent 🐾
 
-ClawYu is a powerful local AI agent driven by the Google Gemini series (currently defaulting to `gemini-2.0-flash`).
+ClawYu is a powerful local AI agent driven by the Google Gemini series (currently defaulting to `gemini-2.5-flash-lite`).
 
 Unlike standard cloud-based chat bots, ClawYu is granted **permissions to interact with your local system**. Based on your natural language instructions, it can intelligently read files, write code, edit documents, and even execute shell scripts on your Windows system to automate a wide variety of tasks.
 
@@ -14,7 +14,8 @@ Unlike standard cloud-based chat bots, ClawYu is granted **permissions to intera
   * Easily read and analyze massive local codebases.
   * Automatically create files and refactor code for you.
   * Execute PowerShell commands to search for information, scrape the web, or manage the file system in the background.
-* **Free and Capable**: Switched to and optimized for the `gemini-2.0-flash` model API, enjoying an extremely high free-tier quota (1500 requests per day), more than enough to handle high-intensity local development and collaboration.
+* **Free and Capable**: Switched to and optimized for the `gemini-2.5-flash-lite` model API, enjoying an extremely high free-tier quota (1500 requests per day), more than enough to handle high-intensity local development and collaboration.
+* **🪐 Native MCP (Model Context Protocol) Support**: ClawYu dynamically supports Anthropic's open MCP standard. By simply writing a config struct, ClawYu can automatically connect to thousands of local extensions and remote databases (like GitHub, SQLite, Postgres, Puppeteer servers).
 
 ## 🚀 Quick Start
 
@@ -76,7 +77,35 @@ ClawYu exposes the following local Python functions internally to the LLM:
 * `write_file_sync(filepath, content)`: Writes to/modifies a file (Subject to strict security review).
 * `execute_command_sync(command)`: Executes Windows Shell commands (Subject to strict security review).
 
-*Note: Currently, due to the limitations of the Google GenAI SDK v1beta version, official built-in tools (such as Google Search) cannot be combined with custom functions (Function Calling). Therefore, the Agent autonomously writes scripts to perform web searches when necessary.*
+### 🔌 Model Context Protocol (MCP) Extensions
+
+ClawYu natively supports **Anthropic's MCP (Model Context Protocol)**. This means it can seamlessly talk to huge varieties of existing capabilities like SQL databases, Slack, Google Drive, or Github by simply defining them in external config files.
+
+#### How to use MCP
+
+1. Create or edit the `mcp_config.json` file in the root directory.
+2. Define your desired MCP servers. Here's an example:
+
+   ```json
+   {
+     "mcpServers": {
+       "sqlite": {
+         "command": "uvx",
+         "args": ["mcp-server-sqlite", "--db-path", "test.db"]
+       },
+       "github": {
+         "command": "npx",
+         "args": ["-y", "@modelcontextprotocol/server-github"],
+         "env": {
+           "GITHUB_PERSONAL_ACCESS_TOKEN": "your_token_here"
+         }
+       }
+     }
+   }
+   ```
+
+3. Ensure you have the required runtimes (`npx` for Node.js servers, `uvx` for Python servers).
+4. Start ClawYu as usual. It automatically connects to the server and feeds the new tools into its "brain"!
 
 ---
 **ClawYu - Your Omnipotent Local AI Pair Programming Assistant!** 💻🚀
