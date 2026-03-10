@@ -189,19 +189,25 @@ header {
     border-radius: var(--radius);
     line-height: 1.6;
     font-size: 0.95rem;
+    word-break: break-word; /* Fix text overflow */
+    overflow-wrap: break-word; /* Fix text overflow */
+    max-width: 100%;
 }
 
 .message.user .message-bubble {
     background: var(--user-msg-bg);
     color: white;
     border-bottom-right-radius: 4px;
-    box-shadow: 0 4px 15px rgba(35, 134, 54, 0.2);
+    box-shadow: 0 4px 15px rgba(35, 134, 54, 0.4); /* Stronger shadow */
 }
 
 .message.agent .message-bubble {
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(255, 255, 255, 0.08); /* Slightly brighter glass */
     border: 1px solid var(--glass-border);
     border-bottom-left-radius: 4px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
 }
 
 /* Markdown Rendering in Messages */
@@ -211,10 +217,16 @@ header {
     background: #000;
     border-radius: 8px;
     padding: 12px;
-    overflow-x: auto;
+    overflow-x: auto; /* Fix code overflow */
     margin: 10px 0;
     border: 1px solid var(--glass-border);
+    max-width: 100%; /* Ensure pre respects bubble width */
 }
+/* Scrollbar styling for pre */
+.message-bubble pre::-webkit-scrollbar { height: 8px; }
+.message-bubble pre::-webkit-scrollbar-track { background: transparent; }
+.message-bubble pre::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 4px; }
+
 .message-bubble code {
     font-family: 'Consolas', monospace;
     font-size: 0.9em;
@@ -222,7 +234,29 @@ header {
     background: rgba(255,255,255,0.1);
     border-radius: 4px;
 }
-.message-bubble pre code { background: none; padding: 0; }
+.message-bubble pre code { background: none; padding: 0; white-space: pre; }
+
+/* Markdown Table overflow fix and styling */
+.message-bubble table {
+    width: 100%;
+    margin-bottom: 1em;
+    border-collapse: collapse;
+    display: block; /* Required for overflow */
+    overflow-x: auto; /* Fix table overflow */
+    white-space: nowrap; /* Keep table cells from breaking awkwardly */
+}
+.message-bubble table::-webkit-scrollbar { height: 8px; }
+.message-bubble table::-webkit-scrollbar-track { background: transparent; }
+.message-bubble table::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 4px; }
+
+.message-bubble th, .message-bubble td {
+    padding: 8px 12px;
+    border: 1px solid var(--glass-border);
+}
+.message-bubble th {
+    background: rgba(255,255,255,0.05);
+    font-weight: 600;
+}
 
 /* Typing Indicator */
 #typing-indicator {
